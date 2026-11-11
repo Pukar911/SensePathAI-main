@@ -1,0 +1,11 @@
+{
+  "title": "SensePath — See Through Sound",
+  "description": "An AI-powered accessibility app that helps blind and visually impaired users identify objects in real-time using their smartphone camera, enhancing their understanding of surroundings.",
+  "robots": {
+    "index": false
+  },
+  "accessibility": {
+    "addBypassLinks": false,
+    "ignoreReducedMotion": false
+  }
+}
