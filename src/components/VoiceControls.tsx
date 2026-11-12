@@ -9,6 +9,7 @@ import {
   VolumeX,
 } from "lucide-react"
 import type { SpeechController } from "../hooks/useSpeech"
+import { playCloudNaturalSpeech } from "../tts"
 
 type RecognitionInstance = {
   lang: string
@@ -55,13 +56,21 @@ export function VoiceControls({
   const [commandMessage, setCommandMessage] = useState("")
   const recognitionSupported = Boolean(getRecognition())
 
-  useEffect(
-    () => () => {
+  const apiKey = import.meta.env.VITE_OPENAI_API_KEY || "";
+
+  useEffect(() => {
+    return () => {
       recognitionRef.current?.abort()
       recognitionRef.current = null
-    },
-    [],
-  )
+    }
+  }, [])
+
+  function handleNaturalSpeech(text: string) {
+    setCommandMessage(text)
+    if (apiKey) {
+      playCloudNaturalSpeech(text, apiKey)
+    }
+  }
 
   function listenForCommand() {
     const Recognition = getRecognition()
@@ -72,38 +81,45 @@ export function VoiceControls({
     recognition.lang = "en-US"
     recognition.continuous = false
     recognition.interimResults = false
+
     recognition.onresult = (event) => {
       const command = event.results[0]?.[0]?.transcript.toLowerCase() || ""
       if (command.includes("describe")) {
         onDescribe()
-        setCommandMessage("Describing surroundings.")
+        handleNaturalSpeech("Describing surroundings.")
       } else if (command.includes("stop assistance")) {
-        setCommandMessage("Stopping assistance.")
+        handleNaturalSpeech("Stopping assistance.")
         onStop()
       } else if (command.includes("where am i")) {
         onWhereAmI()
-        setCommandMessage("Reading current location.")
+        handleNaturalSpeech("Reading current location.")
       } else if (command.includes("mute")) {
         voice.mute()
-        setCommandMessage("Voice muted.")
+        handleNaturalSpeech("Voice muted.")
       } else {
-        setCommandMessage(
+        handleNaturalSpeech(
           "Command not recognized. Try describe surroundings, where am I, mute voice, or stop assistance.",
         )
       }
     }
-    recognition.onerror = () =>
-      setCommandMessage(
-        "Voice command could not be heard. Use the buttons instead.",
-      )
+
+    recognition.onerror = () => {
+      setCommandMessage("Voice command could not be heard. Use the buttons instead.")
+      setListening(false)
+      recognitionRef.current = null
+    }
+
     recognition.onend = () => {
       setListening(false)
       recognitionRef.current = null
     }
+
     setCommandMessage("Listening for one command…")
     setListening(true)
     recognition.start()
   }
+
+  const isVoiceActive = voice.preferences.enabled
 
   return (
     <section
@@ -115,6 +131,7 @@ export function VoiceControls({
           <p className="section-kicker">Spoken assistance</p>
           <h2 id="voice-controls-heading">Voice</h2>
         </div>
+
         <button
           className="icon-button"
           type="button"
@@ -124,28 +141,22 @@ export function VoiceControls({
           <Settings2 size={20} />
         </button>
       </div>
+
       <div className="voice-control-grid">
         <button
-          className={`voice-action ${
-            voice.preferences.enabled ? "voice-action--active" : ""
-          }`}
+          className={`voice-action ${isVoiceActive ? "voice-action--active" : ""}`}
           type="button"
           disabled={!voice.supported}
-          onClick={voice.preferences.enabled ? voice.mute : voice.enable}
-          aria-pressed={voice.preferences.enabled}
+          onClick={isVoiceActive ? voice.mute : voice.enable}
+          aria-pressed={isVoiceActive}
         >
-          {voice.preferences.enabled ? (
-            <VolumeX size={21} />
-          ) : (
-            <Volume2 size={21} />
-          )}
+          {isVoiceActive ? <VolumeX size={21} /> : <Volume2 size={21} />}
           <span>
-            <strong>
-              {voice.preferences.enabled ? "Mute Voice" : "Enable Voice"}
-            </strong>
+            <strong>{isVoiceActive ? "Mute Voice" : "Enable Voice"}</strong>
             <small>{voice.speaking ? "Speaking now" : "Speech output"}</small>
           </span>
         </button>
+
         <button
           className="voice-action"
           type="button"
@@ -159,11 +170,13 @@ export function VoiceControls({
           </span>
         </button>
       </div>
+
       <button
         className="command-button"
         type="button"
         disabled={!recognitionSupported || listening}
         onClick={listenForCommand}
+        aria-busy={listening}
       >
         {recognitionSupported ? (
           listening ? (
@@ -174,12 +187,14 @@ export function VoiceControls({
         ) : (
           <MicOff size={19} />
         )}
+
         {recognitionSupported
           ? listening
-            ? "Listening…"
+            ? "Listening..."
             : "Use one voice command"
           : "Voice commands unavailable in this browser"}
       </button>
+
       {commandMessage && (
         <p className="command-status" role="status">
           {commandMessage}
